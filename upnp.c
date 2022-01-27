@@ -1,5 +1,5 @@
-#include <stdio.h>
 #include "gatewayFinder.h"
+//#include "curlp.c"
 
 //CHECK FOR BOGON TO DETERMINE IF WE ARE BEHIND A NAT TO BEGIN WITH...
 //10.0.0.0/8,
@@ -13,7 +13,6 @@
 //TRY THIS:   sockaddr_in   INSTEAD OF   in_addr
 
 //UNFORTUNATLY VOLATILE DOESN'T HELP MULTI-THREAD VARS - A SEMAPHORE MUST BE USED
-
 
 int main(int argc, char *argv[]){
     gatewayFinder();

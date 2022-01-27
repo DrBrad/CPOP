@@ -1,53 +1,23 @@
 #include <stdio.h>
-#include <ctype.h>
 
-//#define aa 100
-//int bb = 22;
+//ADJUST THESE INCLUDES...
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <string.h>
 
-/*
-HTTP/1.1 200 OK
-Server: Custom/1.0 UPnP/1.0 Proc/Ver
-EXT:
-Location: http://192.168.0.1:5431/dyndev/uuid:98834f4a-5fc7-4a52-8535-dae7a5983a4b
-Cache-Control:max-age=1800
-ST:urn:schemas-upnp-org:device:InternetGatewayDevice:1
-USN:uuid:98834f4a-5fc7-4a52-8535-dae7a5983a4b::urn:schemas-upnp-org:device:InternetGatewayDevice:1
-
-
-M-SEARCH * HTTP/1.1
-HOST: 239.255.255.250:1900
-ST: urn:schemas-upnp-org:service:WANIPConnection:1
-MAN: "ssdp:discover"
-MX: 2
-
-
-M-SEARCH * HTTP/1.1
-HOST: 239.255.255.250:1900
-ST: urn:schemas-upnp-org:service:WANPPPConnection:1
-MAN: "ssdp:discover"
-MX: 2
-
-
-*/
+#include "curlp.c"
 
 void gateway(char *buffer, struct in_addr sin_addr){
-
-    //printf("%ld\n", sizeof());
     if(strncmp(buffer, "HTTP/1.", 7) == 0 || strncmp(buffer, "NOTIFY *", 8) == 0){
         char location[1024];
 
-        char* token = strtok(buffer, "\n");
+        char *token = strtok(buffer, "\n");
         while(token){
-            char lower[strlen(token)];
-            for(int i = 0; i < strlen(token); i++){
-                lower[i] = tolower(token[i]);
-            }
-
-            if(strncmp(lower, "location: ", 10) == 0){
+            if(strncasecmp(token, "location: ", 10) == 0){
                 for(int i = 10; i < strlen(token); i++){
                     location[i-10] = token[i];
                 }
-                //location[strlen(token)-11] = '\0';
                 break;
             }
 
@@ -56,24 +26,52 @@ void gateway(char *buffer, struct in_addr sin_addr){
 
         if(strlen(location) > 0){
 
-            //CONNECT TO LOCATION USING TCP SOCKET
+            URL url = toURL(location);
 
+            int sockfd;
 
+            printf("%s  %s\n", url.host, inet_ntoa(sin_addr));
 
+            if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) >= 0){
+                struct sockaddr_in servaddr, cliaddr;
 
+                memset(&servaddr, 0, sizeof(servaddr));
+                memset(&cliaddr, 0, sizeof(cliaddr));
 
+                cliaddr.sin_family = AF_INET;
+                cliaddr.sin_addr = sin_addr;
+                cliaddr.sin_port = 0;
 
+                if(bind(sockfd, (struct sockaddr *)&cliaddr, sizeof(cliaddr)) >= 0){
+                    //struct sockaddr_in servaddr;
+                    servaddr.sin_family = AF_INET; //IPv4  - I THINK...
+                    servaddr.sin_port = htons(url.port);
+                    servaddr.sin_addr.s_addr = inet_addr(url.host);
 
+                    struct timeval timeout = {
+                        .tv_sec = 5,
+                        .tv_usec = 0
+                    };
+                    setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 
-            printf("LOC: %s\n", location);
-            //printf("ADD: %s\n", inet_ntoa(sin_addr));
+                    if(connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) >= 0){
+                      //SEND
+                      char buffer[4096];
+                      sprintf(buffer, "GET %s HTTP/1.1\r\nHost: %s:%d\r\nAccept-Language: en\r\n\r\n", url.path, url.host, url.port);
+                      send(sockfd, buffer , strlen(buffer), 0);
+
+                      //HEADER
+                      int valread = read(sockfd, buffer, 1024);
+                      printf("%s", buffer);
+
+                      //CONTENT
+                      valread = read(sockfd, buffer, 4096);
+                      printf("%s\n\n\n\n\n", buffer);
+                    }
+                }
+
+                close(sockfd);
+            }
         }
-
-        //printf("asdasdasd\n");
-        //printf("%s\n", buffer);
     }
-
-    //printf("%s\n", buffer);
-
-
 }
